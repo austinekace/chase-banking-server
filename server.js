@@ -19,15 +19,15 @@ const pool = new Pool({
 // Middleware
 app.use(bodyParser.json());
 
-// 1. Serve static files (HTML, CSS, JS) from the 'public' directory.
-// This allows the server to find files like public/styles.css and public/script.js
-app.use(express.static('public')); 
+// 1. Serve static files (HTML, CSS, JS) from the CURRENT directory (__dirname).
+// This correctly serves index.html and any other assets located next to server.js.
+app.use(express.static(path.join(__dirname)));
 
 // 2. EXPLICITLY serve the index.html file for the root path ('/')
-// This fixes the 'Cannot GET /' error.
+// This fixes the 'Cannot GET /' error by telling Express exactly where the file is.
 app.get('/', (req, res) => {
-    // Assuming index.html is inside the 'public' folder
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    // Look for index.html directly in the project root
+    res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 // Original submission route 
