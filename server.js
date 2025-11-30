@@ -1,86 +1,98 @@
-// --- WARNING: THIS IS A TEMPORARY FILE FOR DATA RETRIEVAL ONLY ---
-// --- It will print all collected data in PLAIN TEXT to the Render logs upon startup. ---
-
-const { Pool } = require('pg');
 const express = require('express');
-const bodyParser = require('body-parser');
+const { Pool } = require('pg');
+const path = require('path');
+const cors = require('cors'); // Added for safety, though not strictly needed for same-server frontend/backend
 
-const app = express();
-const port = process.env.PORT || 10000; 
+// Check for and use the DATABASE_URL environment variable provided by Render
+const databaseUrl = process.env.DATABASE_URL;
+
+if (!databaseUrl) {
+    console.error('FATAL ERROR: DATABASE_URL environment variable is not set. Cannot connect to PostgreSQL.');
+    process.exit(1); // Exit if essential config is missing
+}
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false 
-  }
+    connectionString: databaseUrl,
+    // Add SSL configuration for Render deployment
+    ssl: {
+        rejectUnauthorized: false
+    }
 });
 
-// ----------------------------------------------------------------------
-// TEMPORARY: DATA RETRIEVAL FUNCTION - Runs once on server startup
-// ----------------------------------------------------------------------
-async function retrieveAndPrintData() {
+const app = express();
+const PORT = process.env.PORT || 10000; // Render usually provides a port, often 10000
+
+// Middleware
+app.use(cors());
+app.use(express.json()); // To parse JSON bodies from POST requests
+app.use(express.static(path.join(__dirname, '.'))); // Serve static files (index.html, etc.)
+
+// Function to initialize the database table
+async function initializeDatabase() {
     try {
-        console.log("======================================================================");
-        console.log("         ATTENTION: RETRIEVING STORED DATA FROM user_submissions        ");
-        console.log("======================================================================");
-
-        const result = await pool.query(
-            "SELECT id, step, data, ip_address, submission_time FROM user_submissions ORDER BY submission_time DESC"
-        );
-
-        if (result.rows.length === 0) {
-            console.log("DATABASE IS EMPTY: No submissions found in 'user_submissions'.");
-        } else {
-            console.log(`SUCCESS! Found ${result.rows.length} submissions.`);
-            console.log("----------------------------------------------------------------------");
-            
-            result.rows.forEach(row => {
-                console.log(`[ID: ${row.id} | Step: ${row.step}]`);
-                // *** FIX APPLIED HERE: stringify(row.data) ***
-                console.log(`Data: ${JSON.stringify(row.data, null, 2)}`); 
-                console.log(`IP: ${row.ip_address} | Time: ${row.submission_time.toISOString()}`);
-                console.log("---");
-            });
-
-            console.log("----------------------------------------------------------------------");
-            console.log("DATA PRINTING COMPLETE. Check the logs above for the collected data.");
-        }
-
-    } catch (error) {
-        console.error("ERROR DURING DATA RETRIEVAL:", error.message);
+        const client = await pool.connect();
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS user_submissions (
+                id SERIAL PRIMARY KEY,
+                step VARCHAR(50) NOT NULL,
+                data JSONB NOT NULL,
+                submission_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                ip_address INET
+            );
+        `);
+        client.release();
+        console.log('Database table "user_submissions" is ready.');
+    } catch (err) {
+        console.error('Error initializing database:', err.message);
+        // Do not exit here, allow server to run but log error
     }
 }
-// Run the temporary function immediately on server startup
-retrieveAndPrintData();
 
-// ----------------------------------------------------------------------
-// ORIGINAL SERVER LOGIC
-// ----------------------------------------------------------------------
-
-app.use(bodyParser.json());
-app.use(express.static('public'));
-
-app.post('/submit', async (req, res) => {
+// Route to handle data submission from the frontend
+app.post('/submit-data', async (req, res) => {
     const { step, data } = req.body;
-    const ip_address = req.headers['x-forwarded-for'] || req.ip;
+    const ipAddress = req.ip; // Get IP address of the requester
 
     if (!step || !data) {
-        return res.status(400).send('Missing step or data.');
+        return res.status(400).send({ message: 'Missing "step" or "data" fields.' });
     }
 
     try {
-        const query = 'INSERT INTO user_submissions(step, data, ip_address) VALUES($1, $2, $3)';
-        const values = [step, JSON.stringify(data), ip_address]; 
-        await pool.query(query, values);
+        const client = await pool.connect();
+        const result = await client.query(
+            'INSERT INTO user_submissions (step, data, ip_address) VALUES ($1, $2, $3) RETURNING *',
+            [step, data, ipAddress]
+        );
+        client.release();
 
-        console.log(`Data for step ${step} successfully saved to PostgreSQL.`);
-        res.status(200).send({ message: 'Submission received.' });
+        console.log(`Data for step "${step}" successfully saved to PostgreSQL. ID: ${result.rows[0].id}`);
+        
+        // You would integrate your webhook forwarding here if you had one.
+        // For now, we just acknowledge the data was saved.
+        
+        res.status(200).send({ 
+            message: `Data received and saved for step: ${step}`, 
+            // In a real scenario, you'd trigger the next frontend step here
+            // For now, we'll let the frontend handle the navigation
+        });
+
     } catch (err) {
-        console.error('Database error:', err);
-        res.status(500).send('Database submission failed.');
+        console.error('Error saving data to database:', err.message);
+        res.status(500).send({ message: 'Internal server error while saving data.' });
     }
 });
 
-app.listen(port, () => {
-    console.log(`Server listening on port ${port}`);
+// Serve the main HTML file for the root route
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// Start the server only after database is initialized
+initializeDatabase().then(() => {
+    app.listen(PORT, () => {
+        console.log(`Server is running successfully.`);
+        console.log(`Listening on port ${PORT}...`);
+    });
+}).catch(error => {
+    console.error('Failed to start server due to DB initialization error:', error);
 });
