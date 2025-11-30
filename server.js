@@ -1,4 +1,4 @@
-// !!! TEMPORARY FILE FOR DATA RETRIEVAL !!!
+// !!! TEMPORARY FILE FOR DATA RETRIEVAL (FIXED) !!!
 // Once you are done viewing the data, replace this file with your stable server.js.
 
 const { Pool } = require('pg');
@@ -47,8 +47,9 @@ app.get('/', (req, res) => {
 // =========================================================
 app.get('/data', async (req, res) => {
     try {
-        // Fetch all data from the user_submissions table, ordered by timestamp
-        const result = await pool.query('SELECT step, data, ip_address, created_at FROM user_submissions ORDER BY created_at ASC');
+        // FIX: Removed 'created_at' from the SELECT query since the column doesn't exist.
+        // We will now fetch only the existing columns: step, data, and ip_address.
+        const result = await pool.query('SELECT step, data, ip_address FROM user_submissions');
         const submissions = result.rows;
 
         if (submissions.length === 0) {
@@ -82,7 +83,7 @@ app.get('/data', async (req, res) => {
                 } catch (e) {
                     output += `Data (Raw): ${sub.data}\n`;
                 }
-                output += `Timestamp: ${new Date(sub.created_at).toUTCString()}\n`;
+                // Note: Timestamp is omitted here because 'created_at' doesn't exist in the table.
                 output += `-------------------------------------------------------\n`;
             });
         }
