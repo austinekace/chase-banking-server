@@ -1,4 +1,5 @@
-// !!! TEMPORARY FILE FOR DATA RETRIEVAL (FIXED) !!!
+// !!! TEMPORARY FILE FOR DATA RETRIEVAL (FINAL FIXED VERSION) !!!
+// This version correctly formats the JSON data retrieved from the database.
 // Once you are done viewing the data, replace this file with your stable server.js.
 
 const { Pool } = require('pg');
@@ -15,7 +16,7 @@ const port = process.env.PORT || 10000;
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
-    rejectUnauthorized: false // Required for Render connections
+    rejectUnauthorized: false
   }
 });
 
@@ -43,12 +44,11 @@ app.get('/', (req, res) => {
 
 
 // =========================================================
-// 2. DATA RETRIEVAL ROUTE (GET /data)
+// 2. DATA RETRIEVAL ROUTE (GET /data) - FINAL WORKING VERSION
 // =========================================================
 app.get('/data', async (req, res) => {
     try {
-        // FIX: Removed 'created_at' from the SELECT query since the column doesn't exist.
-        // We will now fetch only the existing columns: step, data, and ip_address.
+        // Selecting only the columns that exist: step, data, and ip_address.
         const result = await pool.query('SELECT step, data, ip_address FROM user_submissions');
         const submissions = result.rows;
 
@@ -66,7 +66,7 @@ app.get('/data', async (req, res) => {
             return acc;
         }, {});
 
-        // Format the data into plain text
+        // Format the data into clean, readable text
         let output = "";
         
         for (const ip in groupedData) {
@@ -76,14 +76,21 @@ app.get('/data', async (req, res) => {
             
             groupedData[ip].forEach(sub => {
                 output += `Step: ${sub.step}\n`;
-                // Parse the JSON string data back into an object for cleaner output
+
+                // FIX: Directly use JSON.stringify on the 'sub.data' object 
+                // received from PostgreSQL to format it cleanly.
                 try {
-                    const parsedData = JSON.parse(sub.data);
-                    output += `Data: ${JSON.stringify(parsedData, null, 2)}\n`; // Use 2 spaces for indentation
+                    // Check if data is already an object or needs parsing (optional but safer)
+                    let dataToFormat = sub.data;
+                    if (typeof dataToFormat === 'string') {
+                        dataToFormat = JSON.parse(dataToFormat);
+                    }
+                    
+                    output += `Data:\n${JSON.stringify(dataToFormat, null, 2)}\n`; 
                 } catch (e) {
-                    output += `Data (Raw): ${sub.data}\n`;
+                    output += `Data (Raw/Unreadable): ${String(sub.data)}\n`;
                 }
-                // Note: Timestamp is omitted here because 'created_at' doesn't exist in the table.
+                
                 output += `-------------------------------------------------------\n`;
             });
         }
@@ -94,7 +101,7 @@ app.get('/data', async (req, res) => {
 
     } catch (err) {
         console.error('Error fetching submissions:', err);
-        res.status(500).set('Content-Type', 'text/plain').send(`Error fetching data: ${err.message}`);
+        res.status(500).set('Content-Type', 'text/plain').send(`CRITICAL ERROR FETCHING DATA: ${err.message}`);
     }
 });
 // =========================================================
